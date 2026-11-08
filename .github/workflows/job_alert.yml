@@ -2,20 +2,30 @@ name: Agrégateur Emploi Suisse
 
 on:
   schedule:
-    - cron: '30 6 * * *'
-  workflow_dispatch:
+    # Exécution automatique tous les jours à 07:30 UTC (08:30 heure française)
+    - cron: '30 7 * * *'
+  workflow_dispatch: # Permet le déclenchement manuel
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configurer Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - env:
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Exécution du script d'alerte
+        env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: python aggregate_jobs.py
