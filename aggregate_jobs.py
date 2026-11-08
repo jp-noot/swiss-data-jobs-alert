@@ -4,7 +4,21 @@ import xml.etree.ElementTree as ET
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-KEYWORDS = ["Developer", "Data Scientist", "Software Engineer"]
+KEYWORDS = [
+    # Data Science & Recherche
+    "data scientist", "data-scientist", "data science", "data-science", 
+    "data analyst", "data engineer",
+    "research scientist", "research-scientist", "research engineer",
+    # IA & Machine Learning
+    "ai", "artificial intelligence", "ia",
+    "machine learning", "deep learning", 
+    "ml engineer", "mlop", "mlops",
+    # Spécialités
+    "time series", "time-series",
+    "predictive maintenance", "maintenance prédictive",
+    "computer vision", "nlp", "llm", "generative ai"
+]
+
 CANTONS = ["ZH"]
 MAX_DAYS_OLD = 1
 
