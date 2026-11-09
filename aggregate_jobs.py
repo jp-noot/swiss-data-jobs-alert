@@ -38,16 +38,14 @@ def get_swissdevjobs():
             items = re.findall(r'<(?:item|entry)[^>]*>([\s\S]*?)</(?:item|entry)>', response.text, re.IGNORECASE)
             
             for content in items:
-                # Filtrage par date de publication (24h)
                 d_match = re.search(r'<pubDate[^>]*>(.*?)</pubDate>', content, re.IGNORECASE)
                 if d_match:
                     try:
                         pub_date = parsedate_to_datetime(d_match.group(1))
-                        # Si l'offre a plus de 24h, on passe à la suivante
                         if datetime.now(pub_date.tzinfo) - pub_date > timedelta(days=MAX_DAYS_OLD):
                             continue
                     except:
-                        pass # En cas d'erreur de format de date, on garde l'offre par sécurité
+                        pass
 
                 t_match = re.search(r'<title[^>]*>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
                 l_match = re.search(r'<link[^>]*href=["\'](.*?)["\']', content, re.IGNORECASE)
@@ -68,6 +66,49 @@ def get_swissdevjobs():
     except Exception as e:
         print(f"Erreur SwissDevJobs: {e}")
         
+    return jobs
+
+def get_job_ch():
+    """Récupère les offres récentes depuis l'API publique de job.ch (JobCloud)"""
+    url = "https://www.job.ch/api/v1/public/search"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
+    jobs = []
+    
+    # Recherches ciblées sur Zurich
+    query_terms = ["Data Scientist", "Machine Learning", "Research Engineer", "AI Consultant"]
+    
+    for term in query_terms:
+        params = {
+            "query": term,
+            "location": "Zurich",
+            "page": 1,
+            "rows": 20
+        }
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                for item in data.get("documents", []):
+                    title = item.get("title", "")
+                    if matches_keywords(title):
+                        job_id = item.get("job_id")
+                        company = item.get("company_name", "N/A")
+                        city = item.get("place", "Zurich")
+                        link = f"https://www.job.ch/fr/offres/{job_id}/"
+                        
+                        jobs.append({
+                            "title": title,
+                            "company": company,
+                            "location": city,
+                            "link": link,
+                            "source": "job.ch"
+                        })
+        except Exception as e:
+            print(f"Erreur job.ch ({term}): {e}")
+            
     return jobs
 
 def send_daily_email(jobs):
@@ -99,9 +140,17 @@ def send_daily_email(jobs):
         server.sendmail(email_from, email_to, msg.as_string())
 
 if __name__ == "__main__":
-    # Job-Room est temporairement désactivé suite au blocage 401
-    raw_jobs = get_swissdevjobs()
+    raw_jobs = []
     
+    # 1. Collecte SwissDevJobs
+    raw_jobs.extend(get_swissdevjobs())
+    
+    # 2. Collecte job.ch
+    raw_jobs.extend(get_job_ch())
+    
+    # Déduplication par lien d'offre
     seen = set()
     unique_jobs = [j for j in raw_jobs if not (j["link"] in seen or seen.add(j["link"]))]
+    
+    print(f"Total d'offres uniques trouvées: {len(unique_jobs)}")
     send_daily_email(unique_jobs)
