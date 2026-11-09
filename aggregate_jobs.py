@@ -69,24 +69,16 @@ def get_swissdevjobs():
     return jobs
 
 def get_job_ch():
-    """Récupère les offres récentes depuis l'API publique de job.ch (JobCloud)"""
-    url = "https://www.job.ch/api/v1/public/search"
+    url = "https://www.jobs.ch/api/v1/public/search"  # bien avec un 's'
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json"
     }
     jobs = []
-    
-    # Recherches ciblées sur Zurich
     query_terms = ["Data Scientist", "Machine Learning", "Research Engineer", "AI Consultant"]
     
     for term in query_terms:
-        params = {
-            "query": term,
-            "location": "Zurich",
-            "page": 1,
-            "rows": 20
-        }
+        params = {"query": term, "location": "Zurich", "page": 1, "rows": 20}
         try:
             response = requests.get(url, headers=headers, params=params, timeout=10)
             if response.status_code == 200:
@@ -97,7 +89,7 @@ def get_job_ch():
                         job_id = item.get("job_id")
                         company = item.get("company_name", "N/A")
                         city = item.get("place", "Zurich")
-                        link = f"https://www.job.ch/fr/offres/{job_id}/"
+                        link = f"https://www.jobs.ch/fr/offres/{job_id}/"
                         
                         jobs.append({
                             "title": title,
