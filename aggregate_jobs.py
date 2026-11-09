@@ -19,7 +19,7 @@ KEYWORDS = [
 
 EXCLUDE_TERMS = ["intern", "internship", "stage", "stagiaire", "working student", "werkstudent", "trainee", "temporary", "temporaire", "contractor", "freelance"]
 
-MAX_DAYS_OLD = 1  # 24 heures pour l'alerte quotidienne
+MAX_DAYS_OLD = 1  # 24h pour les alertes quotidiennes
 
 def matches_keywords(title):
     if not title: return False
@@ -80,7 +80,7 @@ def get_job_ch():
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=MAX_DAYS_OLD)
 
     for term in query_terms:
-        for page in range(1, 3):  # 2 pages suffisent amplement pour les dernières 24h
+        for page in range(1, 3):
             params = {
                 "query": term,
                 "page": page,
@@ -107,12 +107,14 @@ def get_job_ch():
                                 pass
                         
                         if matches_keywords(title):
-                            job_id = item.get("job_id")
+                            job_id = item.get("id") or item.get("job_id")
+                            if not job_id:
+                                continue
+                                
                             company = item.get("company_name", "N/A")
                             city = item.get("place", "Suisse")
                             canton = item.get("canton", "")
-                            # Lien corrigé avec /detail/ pour éviter les 404
-                            link = item.get("url") or f"https://www.jobs.ch/fr/offres/detail/{job_id}/"
+                            link = f"https://www.jobs.ch/en/vacancies/detail/{job_id}/"
                             
                             jobs.append({
                                 "title": title,
@@ -128,7 +130,7 @@ def get_job_ch():
     return jobs
 
 def build_table(job_list):
-    if not job_list: return "<p><i>Aucune nouvelle offre trouvée dans cette région.</i></p>"
+    if not job_list: return "<p><i>Aucune nouvelle offre dans cette région aujourd'hui.</i></p>"
     html = "<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse; width:100%; margin-bottom:20px;'>"
     html += "<tr style='background-color:#f2f2f2;'><th>Titre</th><th>Entreprise</th><th>Lieu</th><th>Source</th></tr>"
     for j in job_list:
@@ -167,7 +169,7 @@ def send_daily_email(categorized, total_count):
         html += f"<h2 style='color:#e5a50a;'>3. Reste de la Suisse & Remote - {len(categorized['Reste_CH'])} offres</h2>" + build_table(categorized['Reste_CH'])
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f" Alertes Emploi Data/AI CH ({total_count} offres)"
+    msg["Subject"] = f" Alertes Emploi Data/AI CH ({total_count} nouvelles offres)"
     msg["From"] = email_from
     msg["To"] = email_to
     msg.attach(MIMEText(html, "html"))
@@ -180,16 +182,14 @@ def send_daily_email(categorized, total_count):
 if __name__ == "__main__":
     raw_jobs = []
     
-    # 1. Collecte SwissDevJobs
+    # 1. Collecte SwissDevJobs & job.ch
     raw_jobs.extend(get_swissdevjobs())
-    
-    # 2. Collecte job.ch
     raw_jobs.extend(get_job_ch())
     
-    # Déduplication par lien d'offre
+    # 2. Déduplication par lien d'offre
     seen = set()
     unique_jobs = [j for j in raw_jobs if not (j["link"] in seen or seen.add(j["link"]))]
     
-    # Catégorisation régionale & Envoi
+    # 3. Tri par région & Envoi
     categorized = categorize_jobs(unique_jobs)
     send_daily_email(categorized, len(unique_jobs))
