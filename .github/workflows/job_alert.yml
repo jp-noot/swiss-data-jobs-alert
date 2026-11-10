@@ -2,8 +2,8 @@ name: Agrégateur Emploi Suisse
 
 on:
   schedule:
-    # 10:15 UTC = 11:15 CET (pour le test ce matin)
-    - cron: '15 10 * * *'
+    # 06:03 UTC = 07:03 CET (heure française/suisse en heure d'hiver)
+    - cron: '03 6 * * *'
   workflow_dispatch:
 
 jobs:
