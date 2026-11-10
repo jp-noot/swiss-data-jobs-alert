@@ -16,3 +16,10 @@ env/
 Thumbs.db
 .vscode/
 .idea/
+
+# Fichiers secrets et médias locaux à exclure
+cle_account_google_github.txt
+cle_github_google_account.png
+historical_jobs.py
+*.txt
+*.png
