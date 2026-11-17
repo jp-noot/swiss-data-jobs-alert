@@ -2,8 +2,8 @@ name: Swiss Data Jobs Alert
 
 on:
   schedule:
-    # 06:03 UTC = 07:03 CET (Swiss time in winter)
-    - cron: '03 6 * * *'
+    # 06:17 UTC = 07:17 CET (Swiss winter time; off-peak minute, as :00-:05 is congested on GitHub)
+    - cron: '17 6 * * *'
   workflow_dispatch:
 
 jobs:
