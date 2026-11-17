@@ -11,7 +11,7 @@ Environment variables: EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD (required to send)
   MAX_DAYS_OLD=1    window in days (default: 1 = last 24h)
   INCLUDE_GERMAN=1  add German keywords
   LINKEDIN_IMAP=1   read LinkedIn alerts from the Gmail inbox
-Usage: python aggregate_jobs.py [--dry-run]   (--dry-run writes rapport.html without sending)
+Usage: python aggregate_jobs.py [--dry-run]   (--dry-run writes report.html without sending)
 Dependencies: pip install requests
 """
 import email as email_lib
@@ -271,11 +271,11 @@ def set_stats(source, raw=0, kept=0, note=""):
 
 # ============================== SOURCES ===============================
 def get_swissdevjobs():
-    print(f"--- SwissDevJobs ({MAX_DAYS_OLD} dernier(s) jour(s)) ---")
+    print(f"--- SwissDevJobs ({MAX_DAYS_OLD} last day(s)) ---")
     jobs = []
     r = http_get("https://swissdevjobs.ch/rss")
     if r is None or r.status_code != 200:
-        set_stats("SwissDevJobs", note=f"HTTP {getattr(r, 'status_code', 'erreur')}")
+        set_stats("SwissDevJobs", note=f"HTTP {getattr(r, 'status_code', 'error')}")
         return jobs
     items = re.findall(r"<(?:item|entry)[^>]*>([\s\S]*?)</(?:item|entry)>", r.text, re.IGNORECASE)
     for content in items:
@@ -292,7 +292,7 @@ def get_swissdevjobs():
         link = clean(l_match.group(1)) if l_match else ""
         location = clean(loc_match.group(1)) if loc_match else "Suisse"
         if matches_keywords(title) and link:
-            company, salary = "Voir offre", ""
+            company, salary = "See posting", ""
             m = re.match(r"^(?P<t>.*?)\s+@\s+(?P<c>.*?)(?:\s+\[(?P<s>[^\]]+)\])?$", title)
             if m:
                 title, company, salary = m.group("t"), m.group("c"), m.group("s") or ""
@@ -342,9 +342,9 @@ def get_jobcloud():
                     if job and job["link"] not in seen_links:
                         seen_links.add(job["link"])
                         jobs.append(job)
-        note = f"{failures} requête(s) en échec" if failures else ""
+        note = f"{failures} failed request(s)" if failures else ""
         if raw == 0:
-            note = (note + " ; aucune donnée reçue, l'API a peut-être changé").strip(" ;")
+            note = (note + " ; no data received, the API may have changed").strip(" ;")
         set_stats(site, raw, len(jobs) - kept_before, note)
     return jobs
 
@@ -362,7 +362,7 @@ def get_greenhouse():
         r = http_get(f"https://boards-api.greenhouse.io/v1/boards/{board['token']}/jobs",
                      params={"content": "false"}, headers=API_HEADERS)
         if r is None or r.status_code != 200:
-            set_stats(label, note=f"HTTP {getattr(r, 'status_code', 'erreur')} (token correct ?)")
+            set_stats(label, note=f"HTTP {getattr(r, 'status_code', 'error')} (is the token correct?)")
             continue
         try:
             postings = r.json().get("jobs", [])
@@ -397,17 +397,17 @@ def get_google_careers():
         for page in range(1, GOOGLE_MAX_PAGES + 1):
             r = http_get(GOOGLE_CAREERS_URL, params={"hl": "en_US", "location": location, "page": page})
             if r is None or r.status_code != 200:
-                note = f"HTTP {getattr(r, 'status_code', 'erreur')}"
+                note = f"HTTP {getattr(r, 'status_code', 'error')}"
                 break
             m = re.search(r"AF_initDataCallback\(\{key: 'ds:1'.*?data:(.*?), sideChannel", r.text, re.S)
             try:
                 postings = json.loads(m.group(1))[0] if m else []
             except (ValueError, IndexError, TypeError):
-                note = "format de page changé"
+                note = "page format changed"
                 break
             if not postings:
                 if not m:
-                    note = "format de page changé"
+                    note = "page format changed"
                 break
             for p in postings:
                 try:
@@ -495,9 +495,9 @@ def parse_linkedin_alert_html(body):
 
 def get_linkedin_alerts():
     """Read LinkedIn alert e-mails from the Gmail inbox. LinkedIn itself is never accessed."""
-    print("--- Alertes LinkedIn (IMAP) ---")
+    print("--- LinkedIn alerts (IMAP) ---")
     if not LINKEDIN_IMAP:
-        set_stats("LinkedIn (alertes)", note="disabled (set LINKEDIN_IMAP=1 to enable)")
+        set_stats("LinkedIn (alerts)", note="disabled (set LINKEDIN_IMAP=1 to enable)")
         return []
     jobs = []
     try:
@@ -518,12 +518,12 @@ def get_linkedin_alerts():
                 for job_id, title in parse_linkedin_alert_html(body):
                     if EXCLUDE_RE.search(norm_title(title)):
                         continue
-                    jobs.append(make_job(title, "Voir LinkedIn", subject,
+                    jobs.append(make_job(title, "See LinkedIn", subject,
                                          f"https://www.linkedin.com/jobs/view/{job_id}/", "LinkedIn", published=date))
         imap.logout()
-        set_stats("LinkedIn (alertes)", len(jobs), len(jobs))
+        set_stats("LinkedIn (alerts)", len(jobs), len(jobs))
     except Exception as exc:  # IMAP disabled, wrong password, etc.
-        set_stats("LinkedIn (alertes)", note=f"erreur IMAP : {exc}")
+        set_stats("LinkedIn (alerts)", note=f"IMAP error : {exc}")
     return jobs
 
 
@@ -587,11 +587,11 @@ def categorize_jobs(jobs):
 
 def build_table(job_list):
     if not job_list:
-        return "<p><i>Aucune nouvelle offre dans cette catégorie aujourd'hui.</i></p>"
+        return "<p><i>No new jobs in this category today.</i></p>"
     rows = ["<table border='1' cellpadding='6' cellspacing='0' "
             "style='border-collapse:collapse; width:100%; margin-bottom:20px;'>",
-            "<tr style='background-color:#f2f2f2;'><th></th><th>★</th><th>Titre</th><th>Entreprise</th>"
-            "<th>Lieu</th><th>Source</th><th>Date</th></tr>"]
+            "<tr style='background-color:#f2f2f2;'><th></th><th>★</th><th>Title</th><th>Company</th>"
+            "<th>Location</th><th>Source</th><th>Date</th></tr>"]
     for j in sorted(job_list, key=lambda x: (x.get("score", 0), x["published"] or ""), reverse=True):
         link = j["link"] if j["link"].startswith(("http://", "https://")) else "#"
         badge = "⚠ senior" if is_senior(j["title"]) else ""
@@ -606,27 +606,27 @@ def build_table(job_list):
 
 
 def build_html(categorized, total_count, priority=None):
-    out = [f"<h1>Alerte Data / AI : {total_count} nouvelles offres ({MAX_DAYS_OLD * 24}h)</h1>"]
+    out = [f"<h1>Data / AI Alert: {total_count} new jobs ({MAX_DAYS_OLD * 24}h)</h1>"]
     if total_count == 0:
-        out.append("<p>Aucune nouvelle offre CDI correspondante sur cette période.</p>")
+        out.append("<p>No new matching permanent jobs in this period.</p>")
     if priority:
-        out.append(f"<h2 style='color:#c01c28;'>★ À regarder en priorité : {len(priority)} offres</h2>")
+        out.append(f"<h2 style='color:#c01c28;'>★ Top picks: {len(priority)} jobs</h2>")
         out.append(build_table(priority))
     if total_count:
         sections = [
             ("ZH", "1. Zurich (ZH)", "#1a5fb4"),
-            ("REGION", "2. Région de Zurich (Baden, Zug, Argovie, Thurgovie)", "#26a269"),
-            ("GE", "3. Genève (GE)", "#2ec27e"),
+            ("REGION", "2. Zurich area (Baden, Zug, Aargau, Thurgau)", "#26a269"),
+            ("GE", "3. Geneva (GE)", "#2ec27e"),
             ("Full_Remote", "4. Full Remote", "#9141ac"),
-            ("Reste_CH", "5. Reste de la Suisse", "#e5a50a"),
+            ("Reste_CH", "5. Rest of Switzerland", "#e5a50a"),
         ]
         for key, label, color in sections:
-            out.append(f"<h2 style='color:{color};'>{label} : {len(categorized[key])} offres</h2>")
+            out.append(f"<h2 style='color:{color};'>{label}: {len(categorized[key])} jobs</h2>")
             out.append(build_table(categorized[key]))
-    out.append("<h3>Liens directs à vérifier</h3><p>")
+    out.append("<h3>Direct links to check</h3><p>")
     out.append(" | ".join(f"<a href='{html.escape(u, quote=True)}'>{html.escape(n)}</a>" for n, u in CAREER_LINKS.items()))
-    out.append("</p><h3>Diagnostic des sources</h3><table border='1' cellpadding='4' cellspacing='0' "
-               "style='border-collapse:collapse;'><tr><th>Source</th><th>Lues</th><th>Retenues</th><th>Note</th></tr>")
+    out.append("</p><h3>Source diagnostics</h3><table border='1' cellpadding='4' cellspacing='0' "
+               "style='border-collapse:collapse;'><tr><th>Source</th><th>Read</th><th>Kept</th><th>Note</th></tr>")
     for name, s in STATS.items():
         out.append(f"<tr><td>{html.escape(name)}</td><td>{s['raw']}</td><td>{s['kept']}</td>"
                    f"<td>{html.escape(s['note'])}</td></tr>")
@@ -636,16 +636,16 @@ def build_html(categorized, total_count, priority=None):
 
 def send_email(html_body, total_count):
     if not (EMAIL_FROM and EMAIL_TO and EMAIL_PASSWORD):
-        raise ValueError("Les secrets EMAIL_FROM, EMAIL_TO ou EMAIL_PASSWORD sont manquants !")
+        raise ValueError("The EMAIL_FROM, EMAIL_TO or EMAIL_PASSWORD secrets are missing!")
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Alertes Emploi Data/AI CH ({total_count} nouvelles offres)"
+    msg["Subject"] = f"Swiss Data/AI Job Alerts ({total_count} new jobs)"
     msg["From"] = EMAIL_FROM
     msg["To"] = EMAIL_TO
     msg.attach(MIMEText(html_body, "html", "utf-8"))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(EMAIL_FROM, EMAIL_PASSWORD)
         server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
-    print(f"✅ Alerte quotidienne de {total_count} offres envoyée avec succès !")
+    print(f"✅ Daily alert with {total_count} jobs sent successfully!")
 
 
 SOURCES = [
@@ -654,7 +654,7 @@ SOURCES = [
     ("Greenhouse", get_greenhouse),
     ("Google Careers", get_google_careers),
     ("Workday", get_workday),
-    ("LinkedIn (alertes)", get_linkedin_alerts),
+    ("LinkedIn (alerts)", get_linkedin_alerts),
 ]
 
 
@@ -665,7 +665,7 @@ def collect():
             raw_jobs.extend(fn())
         except Exception as exc:  # a failing source does not block the others
             print(f"  ! {name} crashed : {exc}")
-            set_stats(name, note=f"plantage : {exc}")
+            set_stats(name, note=f"crash: {exc}")
     jobs = dedupe(raw_jobs)
     for job in jobs:
         job["score"] = relevance(job)
@@ -679,8 +679,8 @@ def main(argv):
                       key=lambda j: (j["score"], j["published"]), reverse=True)[:30]
     html_body = build_html(categorized, len(jobs), priority)
     if "--dry-run" in argv:
-        Path("rapport.html").write_text(html_body, encoding="utf-8")
-        print(f"Mode test : {len(jobs)} offres écrites dans rapport.html")
+        Path("report.html").write_text(html_body, encoding="utf-8")
+        print(f"Dry run: {len(jobs)} jobs written to report.html")
         return
     send_email(html_body, len(jobs))
 
