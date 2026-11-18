@@ -132,6 +132,11 @@ GOOGLE_CAREERS_URL = "https://www.google.com/about/careers/applications/jobs/res
 GOOGLE_LOCATIONS = ["Zurich, Switzerland", "Geneva, Switzerland"]
 GOOGLE_MAX_PAGES = 5
 
+# Apple Jobs: "switzerland-CHEC" covers Zurich, Lausanne, Dietlikon (20 results per page).
+APPLE_URL = "https://jobs.apple.com/en-us/search"
+APPLE_LOCATIONS = ["switzerland-CHEC"]
+APPLE_MAX_PAGES = 5
+
 # Workday portals: fill in by hand (https://<tenant>.<wd>.myworkdayjobs.com/<site>).
 WORKDAY_SITES = [
     # {"label": "Entreprise X", "tenant": "entreprisex", "wd": "wd3", "site": "Careers"},
@@ -434,6 +439,39 @@ def get_google_careers():
     return jobs
 
 
+def get_apple():
+    """Apple Jobs: results are embedded as JSON in the page (__staticRouterHydrationData)."""
+    print("--- Apple ---")
+    jobs, raw, seen, note = [], 0, set(), ""
+    for location in APPLE_LOCATIONS:
+        for page in range(1, APPLE_MAX_PAGES + 1):
+            r = http_get(APPLE_URL, params={"location": location, "page": page})
+            if r is None or r.status_code != 200:
+                note = f"HTTP {getattr(r, 'status_code', 'error')}"
+                break
+            m = re.search(r"__staticRouterHydrationData\s*=\s*JSON\.parse\((\".*?\")\);", r.text, re.S)
+            try:
+                postings = json.loads(json.loads(m.group(1)))["loaderData"]["search"]["searchResults"]
+            except (AttributeError, KeyError, ValueError, TypeError):
+                note = "page format changed"
+                break
+            for p in postings:
+                raw += 1
+                title, pos_id = p.get("postingTitle", ""), p.get("positionId")
+                pub = parse_dt(p.get("postDateInGMT"))
+                if not pos_id or pos_id in seen or not is_recent(pub) or not matches_keywords(title):
+                    continue
+                seen.add(pos_id)
+                loc = ", ".join(l.get("name", "") for l in p.get("locations", [])) or "Suisse"
+                slug = p.get("transformedPostingTitle", "")
+                jobs.append(make_job(title, "Apple", loc, f"https://jobs.apple.com/en-us/details/{pos_id}/{slug}",
+                                     "Apple", published=pub))
+            if len(postings) < 20:
+                break
+    set_stats("Apple", raw, len(jobs), note)
+    return jobs
+
+
 def get_workday():
     """'cxs' API used by Workday career pages (JSON POST)."""
     print("--- Workday ---")
@@ -653,6 +691,7 @@ SOURCES = [
     ("jobs.ch / jobup.ch", get_jobcloud),
     ("Greenhouse", get_greenhouse),
     ("Google Careers", get_google_careers),
+    ("Apple", get_apple),
     ("Workday", get_workday),
     ("LinkedIn (alerts)", get_linkedin_alerts),
 ]
